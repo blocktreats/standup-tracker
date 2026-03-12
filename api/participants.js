@@ -33,6 +33,10 @@ module.exports = async function handler(req, res) {
     );
     const crData = await crResp.json();
 
+    if (crData.error) {
+      return res.status(502).json({ error: 'Meet API error', detail: crData.error.message || JSON.stringify(crData.error) });
+    }
+
     if (!crData.conferenceRecords || crData.conferenceRecords.length === 0) {
       return res.status(200).json({ participants: [] });
     }
@@ -77,7 +81,7 @@ module.exports = async function handler(req, res) {
 
     return res.status(200).json({ participants: result });
   } catch (err) {
-    console.error('Meet API error:', err);
-    return res.status(500).json({ error: 'Failed to fetch participants' });
+    console.error('Meet API error:', err.message || err);
+    return res.status(500).json({ error: 'Failed to fetch participants', detail: err.message || String(err) });
   }
 };
