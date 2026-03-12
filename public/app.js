@@ -1,6 +1,6 @@
 // ============================================
 // STANDUP TRACKER — Simple Checklist Mode
-// Type names, tap to mark done. Syncs in real-time.
+// Auto-pulls names from Meet. Tap to mark done.
 // ============================================
 
 (function () {
@@ -8,8 +8,11 @@
 
   var sb;
   var meetingId = null;
+  var meetingCode = null;
   var timerInterval = null;
   var channel = null;
+  var accessToken = null;
+  var pollInterval = null;
 
   var $ = function (sel) { return document.querySelector(sel); };
 
@@ -24,7 +27,7 @@
 
     sb = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
 
-    // Meet SDK — just for meeting ID
+    // Meet SDK — for meeting ID and code
     try {
       var meetSession = await meet.addon.createAddonSession({
         cloudProjectNumber: config.cloudProjectNumber,
@@ -32,12 +35,14 @@
       var sidePanelClient = await meetSession.createSidePanelClient();
       var info = await sidePanelClient.getMeetingInfo();
       meetingId = sanitize(info.meetingId);
+      meetingCode = info.meetingCode;
     } catch (e) {
       console.warn('Meet SDK unavailable, using test mode:', e.message || e);
       meetingId = 'test-' + new Date().toISOString().slice(0, 10);
+      meetingCode = null;
     }
 
-    // Go straight to the app
+    // Show app immediately
     var existing = await loadMeetingData();
     var meetingData = existing || { participants: {} };
     if (!meetingData.participants) meetingData.participants = {};
@@ -46,7 +51,7 @@
     $('#loading').classList.add('hidden');
     $('#app').classList.remove('hidden');
 
-    // Wire up add-participant input
+    // Wire up manual add input
     var input = $('#add-name-input');
     var addBtn = $('#add-name-btn');
     addBtn.addEventListener('click', function () { addParticipant(input); });
@@ -70,9 +75,147 @@
         }
       })
       .subscribe();
+
+    // Try to silently fetch participants from Meet API
+    if (meetingCode && config.oauthClientId && config.oauthClientId !== 'YOUR_OAUTH_CLIENT_ID') {
+      tryFetchParticipants(config.oauthClientId);
+    }
   }
 
-  // ---- Add Participant ----
+  // ---- Meet API (silent OAuth, no sign-in UI) ----
+
+  function tryFetchParticipants(clientId) {
+    try {
+      var tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'https://www.googleapis.com/auth/meetings.space.readonly',
+        prompt: '',
+        callback: function (response) {
+          if (response.error) {
+            console.warn('Silent OAuth failed — showing import button');
+            showImportButton(clientId);
+            return;
+          }
+          accessToken = response.access_token;
+          fetchMeetParticipants();
+          // Poll every 30s for new joiners
+          if (pollInterval) clearInterval(pollInterval);
+          pollInterval = setInterval(fetchMeetParticipants, 30000);
+        },
+      });
+      tokenClient.requestAccessToken();
+    } catch (e) {
+      console.warn('GIS not available:', e);
+    }
+  }
+
+  function requestTokenWithConsent(clientId) {
+    try {
+      var tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'https://www.googleapis.com/auth/meetings.space.readonly',
+        callback: function (response) {
+          if (response.error) {
+            console.warn('OAuth consent failed:', response.error);
+            return;
+          }
+          accessToken = response.access_token;
+          // Remove the import button
+          var btn = $('#import-btn');
+          if (btn) btn.remove();
+          fetchMeetParticipants();
+          if (pollInterval) clearInterval(pollInterval);
+          pollInterval = setInterval(fetchMeetParticipants, 30000);
+        },
+      });
+      tokenClient.requestAccessToken();
+    } catch (e) {
+      console.warn('OAuth consent request failed:', e);
+    }
+  }
+
+  function showImportButton(clientId) {
+    // Only show if not already there
+    if ($('#import-btn')) return;
+    var header = $('header');
+    var btn = document.createElement('button');
+    btn.id = 'import-btn';
+    btn.className = 'btn btn-import';
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+      + '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>'
+      + '<circle cx="9" cy="7" r="4"/>'
+      + '<path d="M23 21v-2a4 4 0 0 0-3-3.87"/>'
+      + '<path d="M16 3.13a4 4 0 0 1 0 7.75"/>'
+      + '</svg> Import from Meet';
+    btn.addEventListener('click', function () {
+      requestTokenWithConsent(clientId);
+    });
+    header.appendChild(btn);
+  }
+
+  async function fetchMeetParticipants() {
+    if (!accessToken || !meetingCode) return;
+    try {
+      var resp = await fetch(
+        'https://meet.googleapis.com/v2/conferenceRecords?filter=space.meeting_code%3D'
+        + encodeURIComponent(meetingCode),
+        { headers: { Authorization: 'Bearer ' + accessToken } }
+      );
+      var data = await resp.json();
+      if (!data.conferenceRecords || data.conferenceRecords.length === 0) return;
+
+      var record = data.conferenceRecords[data.conferenceRecords.length - 1];
+      var partResp = await fetch(
+        'https://meet.googleapis.com/v2/' + record.name + '/participants',
+        { headers: { Authorization: 'Bearer ' + accessToken } }
+      );
+      var partData = await partResp.json();
+      if (!partData.participants || partData.participants.length === 0) return;
+
+      await mergeApiParticipants(partData.participants);
+    } catch (e) {
+      console.error('Failed to fetch Meet participants:', e);
+    }
+  }
+
+  async function mergeApiParticipants(apiParticipants) {
+    var meetingData = await loadMeetingData();
+    if (!meetingData) meetingData = { participants: {} };
+    if (!meetingData.participants) meetingData.participants = {};
+
+    var changed = false;
+    apiParticipants.forEach(function (p) {
+      var displayName = null;
+      var participantId = null;
+
+      if (p.signedinUser) {
+        displayName = p.signedinUser.displayName;
+        var userId = (p.signedinUser.user || '').replace('users/', '');
+        if (userId) participantId = 'google-' + userId;
+      } else if (p.anonymousUser) {
+        displayName = p.anonymousUser.displayName;
+      } else if (p.phoneUser) {
+        displayName = p.phoneUser.displayName;
+      }
+
+      if (!displayName) return;
+      if (!participantId) {
+        participantId = 'meet-' + displayName.toLowerCase().replace(/\s+/g, '-');
+      }
+
+      if (!meetingData.participants[participantId]) {
+        meetingData.participants[participantId] = {
+          name: displayName,
+          done: false,
+        };
+        changed = true;
+      }
+    });
+
+    if (changed) await saveMeetingData(meetingData);
+  }
+
+  // ---- Manual Add ----
 
   async function addParticipant(input) {
     var name = input.value.trim();
@@ -81,7 +224,6 @@
     input.focus();
 
     var id = 'p-' + name.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now().toString(36);
-
     await loadThenSave(function (data) {
       data.participants[id] = { name: name, done: false };
       return data;
@@ -142,7 +284,7 @@
 
     var html = '';
     if (total === 0) {
-      html = '<div class="empty-state">Add participants above to get started.</div>';
+      html = '<div class="empty-state">Waiting for participants...</div>';
     } else {
       html = '<div class="section-label">' + doneCount + ' / ' + total + ' done</div>';
 

@@ -327,6 +327,34 @@ h1 {
   transform: scale(0.92);
 }
 
+.btn-import {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--accent-light);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
+}
+
+.btn-import:hover {
+  background: var(--accent-soft);
+  border-color: rgba(11, 165, 236, 0.3);
+}
+
+.btn-import:active {
+  transform: scale(0.98);
+}
+
 .btn-icon {
   background: none;
   border: none;
