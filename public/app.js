@@ -100,7 +100,7 @@
           fetchMeetParticipants();
           // Poll every 30s for new joiners
           if (pollInterval) clearInterval(pollInterval);
-          pollInterval = setInterval(fetchMeetParticipants, 30000);
+          pollInterval = setInterval(fetchMeetParticipants, 15000);
         },
       });
       tokenClient.requestAccessToken();
@@ -125,7 +125,7 @@
           if (btn) btn.remove();
           fetchMeetParticipants();
           if (pollInterval) clearInterval(pollInterval);
-          pollInterval = setInterval(fetchMeetParticipants, 30000);
+          pollInterval = setInterval(fetchMeetParticipants, 15000);
         },
       });
       tokenClient.requestAccessToken();
@@ -165,14 +165,23 @@
       if (!data.conferenceRecords || data.conferenceRecords.length === 0) return;
 
       var record = data.conferenceRecords[data.conferenceRecords.length - 1];
-      var partResp = await fetch(
-        'https://meet.googleapis.com/v2/' + record.name + '/participants',
-        { headers: { Authorization: 'Bearer ' + accessToken } }
-      );
-      var partData = await partResp.json();
-      if (!partData.participants || partData.participants.length === 0) return;
 
-      await mergeApiParticipants(partData.participants);
+      // Fetch all pages of participants
+      var allParticipants = [];
+      var nextPageToken = null;
+      do {
+        var url = 'https://meet.googleapis.com/v2/' + record.name + '/participants?pageSize=100';
+        if (nextPageToken) url += '&pageToken=' + encodeURIComponent(nextPageToken);
+        var partResp = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
+        var partData = await partResp.json();
+        if (partData.participants) {
+          allParticipants = allParticipants.concat(partData.participants);
+        }
+        nextPageToken = partData.nextPageToken || null;
+      } while (nextPageToken);
+
+      if (allParticipants.length === 0) return;
+      await mergeApiParticipants(allParticipants);
     } catch (e) {
       console.error('Failed to fetch Meet participants:', e);
     }
