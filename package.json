@@ -1,0 +1,6 @@
+{
+  "name": "standup-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Google Meet add-on for tracking standup speakers, powered by Supabase"
+}

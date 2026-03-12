@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Standup Tracker</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Name Entry Overlay -->
+  <div id="name-overlay" class="overlay hidden">
+    <div class="overlay-card">
+      <h2>Join Standup</h2>
+      <p>Enter your name so your team knows who you are.</p>
+      <input type="text" id="name-input" placeholder="Your name" maxlength="50" autocomplete="off">
+      <button id="name-submit" class="btn btn-primary">Join</button>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div id="loading">
+    <div class="spinner"></div>
+    <p>Connecting...</p>
+  </div>
+
+  <!-- Main App -->
+  <div id="app" class="hidden">
+    <header>
+      <div class="header-top">
+        <h1>Standup Tracker</h1>
+        <span id="timer" class="timer hidden">00:00</span>
+      </div>
+      <div class="header-user">
+        <span id="my-name-display"></span>
+        <button id="change-name" class="btn-icon" title="Change name">&#9998;</button>
+      </div>
+    </header>
+
+    <main id="participant-list"></main>
+
+    <footer id="actions"></footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://www.gstatic.com/meetjs/addons/1.1.0/meet.addons.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
