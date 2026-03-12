@@ -1,13 +1,12 @@
 // ============================================
-// STANDUP TRACKER — Google Meet Add-on
-// Powered by Supabase Realtime + Google Meet API
+// STANDUP TRACKER — Simple Checklist Mode
+// Tap a name to mark them done. Syncs in real-time.
 // ============================================
 
 (function () {
   'use strict';
 
-  // ---- State ----
-  var sb; // Supabase client
+  var sb;
   var meetingId = null;
   var meetingCode = null;
   var myId = localStorage.getItem('standup-id');
@@ -16,6 +15,7 @@
   var channel = null;
   var tokenClient = null;
   var accessToken = null;
+  var pollInterval = null;
 
   if (!myId) {
     myId = crypto.randomUUID();
@@ -29,7 +29,7 @@
   async function init() {
     var config = window.STANDUP_CONFIG;
     if (!config || config.supabaseUrl === 'YOUR_SUPABASE_URL') {
-      showError('Please update config.js with your Supabase settings. See README.md.');
+      showError('Please update config.js with your Supabase settings.');
       return;
     }
 
@@ -63,7 +63,6 @@
   // ---- Google Auth ----
 
   function initGoogleAuth(clientId) {
-    // One Tap: auto-detect user identity
     try {
       google.accounts.id.initialize({
         client_id: clientId,
@@ -72,9 +71,7 @@
         cancel_on_tap_outside: false,
       });
       google.accounts.id.prompt(function (notification) {
-        // If One Tap fails (dismissed, skipped, iframe issue), fall back
         if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-          console.warn('One Tap not shown:', notification.getNotDisplayedReason() || notification.getSkippedReason());
           if (myName) {
             joinAndFetchParticipants(clientId);
           } else {
@@ -86,16 +83,12 @@
       });
     } catch (e) {
       console.warn('GIS init failed:', e);
-      if (myName) {
-        join();
-      } else {
-        showNamePrompt();
-      }
+      if (myName) join();
+      else showNamePrompt();
     }
   }
 
   function handleCredentialResponse(response) {
-    // Decode ID token to get user info
     try {
       var payload = JSON.parse(atob(response.credential.split('.')[1]));
       myName = payload.name || payload.email || myName;
@@ -105,16 +98,11 @@
     } catch (e) {
       console.warn('Failed to decode ID token:', e);
     }
-
-    var config = window.STANDUP_CONFIG;
-    joinAndFetchParticipants(config.oauthClientId);
+    joinAndFetchParticipants(window.STANDUP_CONFIG.oauthClientId);
   }
 
   function joinAndFetchParticipants(clientId) {
-    // Join first so the user sees the UI immediately
     join();
-
-    // Then try to fetch all participants via Meet API
     if (meetingCode && clientId) {
       tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: clientId,
@@ -133,43 +121,31 @@
     }
     accessToken = response.access_token;
     fetchMeetParticipants();
+    // Poll for new participants every 30s
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = setInterval(fetchMeetParticipants, 30000);
   }
 
   async function fetchMeetParticipants() {
     if (!accessToken || !meetingCode) return;
-
     try {
-      // Find conference record for this meeting code
       var resp = await fetch(
         'https://meet.googleapis.com/v2/conferenceRecords?filter=space.meeting_code%3D'
         + encodeURIComponent(meetingCode),
         { headers: { Authorization: 'Bearer ' + accessToken } }
       );
       var data = await resp.json();
+      if (!data.conferenceRecords || data.conferenceRecords.length === 0) return;
 
-      if (!data.conferenceRecords || data.conferenceRecords.length === 0) {
-        console.warn('No conference records found for meeting code:', meetingCode);
-        return;
-      }
-
-      // Use the most recent conference record
       var record = data.conferenceRecords[data.conferenceRecords.length - 1];
-
-      // Fetch participants
       var partResp = await fetch(
         'https://meet.googleapis.com/v2/' + record.name + '/participants',
         { headers: { Authorization: 'Bearer ' + accessToken } }
       );
       var partData = await partResp.json();
+      if (!partData.participants || partData.participants.length === 0) return;
 
-      if (!partData.participants || partData.participants.length === 0) {
-        console.warn('No participants returned from Meet API');
-        return;
-      }
-
-      // Merge API participants into the meeting data
       await mergeApiParticipants(partData.participants);
-
     } catch (e) {
       console.error('Failed to fetch Meet participants:', e);
     }
@@ -177,11 +153,10 @@
 
   async function mergeApiParticipants(apiParticipants) {
     var meetingData = await loadMeetingData();
-    if (!meetingData) return;
+    if (!meetingData) meetingData = { participants: {} };
     if (!meetingData.participants) meetingData.participants = {};
 
     var changed = false;
-
     apiParticipants.forEach(function (p) {
       var displayName = null;
       var participantId = null;
@@ -189,9 +164,7 @@
       if (p.signedinUser) {
         displayName = p.signedinUser.displayName;
         var userId = (p.signedinUser.user || '').replace('users/', '');
-        if (userId) {
-          participantId = 'google-' + userId;
-        }
+        if (userId) participantId = 'google-' + userId;
       } else if (p.anonymousUser) {
         displayName = p.anonymousUser.displayName;
       } else if (p.phoneUser) {
@@ -203,25 +176,19 @@
         participantId = 'meet-' + displayName.toLowerCase().replace(/\s+/g, '-');
       }
 
-      // Only add if not already present
       if (!meetingData.participants[participantId]) {
         meetingData.participants[participantId] = {
           name: displayName,
-          status: 'waiting',
-          joinedAt: p.earliestStartTime
-            ? new Date(p.earliestStartTime).getTime()
-            : Date.now(),
+          done: false,
         };
         changed = true;
       }
     });
 
-    if (changed) {
-      await saveMeetingData(meetingData);
-    }
+    if (changed) await saveMeetingData(meetingData);
   }
 
-  // ---- Name Prompt (fallback when GIS unavailable) ----
+  // ---- Name Prompt (fallback) ----
 
   function showNamePrompt(onComplete) {
     $('#loading').classList.add('hidden');
@@ -239,11 +206,8 @@
       localStorage.setItem('standup-name', myName);
       $('#name-overlay').classList.add('hidden');
       $('#loading').classList.remove('hidden');
-      if (onComplete) {
-        onComplete();
-      } else {
-        join();
-      }
+      if (onComplete) onComplete();
+      else join();
     };
 
     $('#name-submit').addEventListener('click', submit);
@@ -288,38 +252,21 @@
 
   async function loadThenSave(modifyFn) {
     var data = await loadMeetingData();
-    if (!data) return;
+    if (!data) data = { participants: {} };
     data = modifyFn(data);
     if (data) await saveMeetingData(data);
   }
 
-  // ---- Join Meeting ----
+  // ---- Join ----
 
   async function join() {
     var existing = await loadMeetingData();
-    var meetingData;
-
-    if (!existing) {
-      meetingData = { state: 'lobby', participants: {} };
-    } else {
-      meetingData = existing;
-    }
-
+    var meetingData = existing || { participants: {} };
     if (!meetingData.participants) meetingData.participants = {};
 
-    // Add or update self
+    // Add self
     if (!meetingData.participants[myId]) {
-      meetingData.participants[myId] = {
-        name: myName,
-        status: 'waiting',
-        joinedAt: Date.now(),
-      };
-      if (meetingData.state === 'active') {
-        if (!meetingData.speakingOrder) meetingData.speakingOrder = [];
-        if (meetingData.speakingOrder.indexOf(myId) === -1) {
-          meetingData.speakingOrder.push(myId);
-        }
-      }
+      meetingData.participants[myId] = { name: myName, done: false };
     } else {
       meetingData.participants[myId].name = myName;
     }
@@ -354,14 +301,10 @@
 
   function render(data) {
     if (!data) return;
-
-    var state = data.state || 'lobby';
     var participants = data.participants || {};
-    var order = data.speakingOrder || [];
-    var currentIndex = data.currentIndex || 0;
-
     var timerEl = $('#timer');
-    if (state === 'active' && data.startedAt) {
+
+    if (data.startedAt) {
       timerEl.classList.remove('hidden');
       startTimer(data.startedAt);
     } else {
@@ -369,245 +312,111 @@
       stopTimer();
     }
 
-    switch (state) {
-      case 'lobby':  renderLobby(participants); break;
-      case 'active': renderActive(participants, order, currentIndex); break;
-      case 'complete': renderComplete(participants, order); break;
-    }
-  }
-
-  function renderLobby(participants) {
     var list = $('#participant-list');
     var actions = $('#actions');
 
-    var sorted = Object.entries(participants)
-      .sort(function (a, b) { return (a[1].joinedAt || 0) - (b[1].joinedAt || 0); });
+    var entries = Object.entries(participants).sort(function (a, b) {
+      // Waiting first, done at bottom; alphabetical within each group
+      if (a[1].done !== b[1].done) return a[1].done ? 1 : -1;
+      return (a[1].name || '').localeCompare(b[1].name || '');
+    });
+
+    var total = entries.length;
+    var doneCount = entries.filter(function (e) { return e[1].done; }).length;
 
     var html = '';
-    if (sorted.length === 0) {
-      html = '<div class="empty-state">Waiting for participants to join...</div>';
+    if (total === 0) {
+      html = '<div class="empty-state">No participants yet.<br>Waiting for Meet API...</div>';
     } else {
-      html = '<div class="section-label">Participants (' + sorted.length + ')</div>';
-      sorted.forEach(function (entry) {
+      html = '<div class="section-label">' + doneCount + ' / ' + total + ' done</div>';
+
+      var pct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
+      html += '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>';
+
+      entries.forEach(function (entry) {
         var id = entry[0];
         var p = entry[1];
         var isMe = id === myId;
-        html += '<div class="participant' + (isMe ? ' is-me' : '') + '">'
+        var statusClass = p.done ? 'done' : 'waiting';
+
+        html += '<div class="participant clickable ' + statusClass + (isMe ? ' is-me' : '') + '" onclick="StandupApp.toggleDone(\'' + id + '\')">'
           + avatarHtml(p.name)
           + '<div class="participant-info">'
           + '<span class="participant-name">' + esc(p.name) + (isMe ? ' <span class="you-tag">(you)</span>' : '') + '</span>'
-          + '<span class="participant-meta">Ready</span>'
+          + '<span class="participant-meta">' + (p.done ? 'Done' : 'Waiting') + '</span>'
           + '</div>'
-          + (isMe ? '' : '<button class="remove-btn" onclick="StandupApp.removeParticipant(\'' + id + '\')" title="Remove">&times;</button>')
+          + '<div class="check-toggle ' + (p.done ? 'checked' : '') + '">'
+          + (p.done ? checkSvg() : circleSvg())
+          + '</div>'
           + '</div>';
       });
     }
     list.innerHTML = html;
 
-    var canStart = sorted.length >= 1;
-    actions.innerHTML = '<div class="action-buttons">'
-      + '<button class="btn btn-secondary"' + (canStart ? '' : ' disabled') + ' onclick="StandupApp.startStandup(true)">Shuffle & Start</button>'
-      + '<button class="btn btn-primary"' + (canStart ? '' : ' disabled') + ' onclick="StandupApp.startStandup(false)">Start in Order</button>'
-      + '</div>';
+    // Footer
+    var hasStarted = !!data.startedAt;
+    var allDone = total > 0 && doneCount === total;
+
+    if (allDone && hasStarted) {
+      var elapsed = Math.floor((Date.now() - data.startedAt) / 1000);
+      actions.innerHTML = '<div class="complete-banner">'
+        + '<img src="capy-su.png" alt="" width="24" height="24" class="complete-icon">'
+        + ' All done in ' + formatTime(elapsed) + '!'
+        + '</div>'
+        + '<button class="btn btn-primary btn-glow" onclick="StandupApp.reset()">New Standup</button>';
+    } else if (allDone) {
+      actions.innerHTML = '<div class="complete-banner">'
+        + '<img src="capy-su.png" alt="" width="24" height="24" class="complete-icon">'
+        + ' All done!'
+        + '</div>'
+        + '<button class="btn btn-primary btn-glow" onclick="StandupApp.reset()">New Standup</button>';
+    } else if (hasStarted) {
+      actions.innerHTML = '<button class="btn btn-secondary" onclick="StandupApp.reset()">Reset</button>';
+    } else {
+      actions.innerHTML = '<button class="btn btn-primary btn-glow" onclick="StandupApp.start()"'
+        + (total === 0 ? ' disabled' : '') + '>Start Standup</button>';
+    }
   }
 
-  function renderActive(participants, order, currentIndex) {
-    var list = $('#participant-list');
-    var actions = $('#actions');
-
-    var total = order.length;
-    var done = 0;
-    for (var i = 0; i < currentIndex && i < total; i++) done++;
-    var pctDone = total > 0 ? Math.round((done / total) * 100) : 0;
-
-    var html = '<div class="section-label">Progress: ' + done + ' / ' + total + '</div>'
-      + '<div class="progress-bar"><div class="progress-fill" style="width:' + pctDone + '%"></div></div>';
-
-    order.forEach(function (id, i) {
-      var p = participants[id];
-      if (!p) return;
-
-      var statusClass, meta;
-      if (p.status === 'skipped') {
-        statusClass = 'skipped';
-        meta = 'Skipped';
-      } else if (i < currentIndex) {
-        statusClass = 'done';
-        meta = 'Done';
-      } else if (i === currentIndex) {
-        statusClass = 'speaking';
-        meta = 'Speaking now';
-      } else {
-        statusClass = 'waiting';
-        meta = 'Up next';
-      }
-
-      var isMe = id === myId;
-      var capyIcon = (statusClass === 'speaking') ? '<img src="capy.png" class="speaking-icon" alt="">' : '';
-      html += '<div class="participant ' + statusClass + (isMe ? ' is-me' : '') + '">'
-        + avatarHtml(p.name)
-        + '<div class="participant-info">'
-        + '<span class="participant-name">' + esc(p.name) + (isMe ? ' <span class="you-tag">(you)</span>' : '') + '</span>'
-        + '<span class="participant-meta">' + meta + '</span>'
-        + '</div>'
-        + capyIcon
-        + '</div>';
-    });
-
-    Object.entries(participants).forEach(function (entry) {
-      var id = entry[0];
-      var p = entry[1];
-      if (order.indexOf(id) === -1) {
-        var isMe = id === myId;
-        html += '<div class="participant waiting' + (isMe ? ' is-me' : '') + '">'
-          + avatarHtml(p.name)
-          + '<div class="participant-info">'
-          + '<span class="participant-name">' + esc(p.name) + (isMe ? ' <span class="you-tag">(you)</span>' : '') + '</span>'
-          + '<span class="participant-meta">Joined late</span>'
-          + '</div>'
-          + '</div>';
-      }
-    });
-
-    list.innerHTML = html;
-
-    var currentSpeaker = order[currentIndex] && participants[order[currentIndex]];
-    var speakerName = currentSpeaker ? esc(currentSpeaker.name) : '?';
-
-    actions.innerHTML = '<div class="current-speaker">Speaking: <strong>' + speakerName + '</strong></div>'
-      + '<div class="action-buttons">'
-      + '<button class="btn btn-secondary" onclick="StandupApp.skipSpeaker()">Skip</button>'
-      + '<button class="btn btn-primary" onclick="StandupApp.advanceSpeaker()">Done &rarr; Next</button>'
-      + '</div>';
+  function checkSvg() {
+    return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">'
+      + '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>'
+      + '<polyline points="22 4 12 14.01 9 11.01"/>'
+      + '</svg>';
   }
 
-  function renderComplete(participants, order) {
-    var list = $('#participant-list');
-    var actions = $('#actions');
-
-    var html = '<div class="section-label complete-label">Standup Complete!</div>';
-    (order || []).forEach(function (id) {
-      var p = participants[id];
-      if (!p) return;
-      var isMe = id === myId;
-      var statusClass = p.status === 'skipped' ? 'skipped' : 'done';
-      var meta = p.status === 'skipped' ? 'Skipped' : 'Done';
-      html += '<div class="participant ' + statusClass + '">'
-        + avatarHtml(p.name)
-        + '<div class="participant-info">'
-        + '<span class="participant-name">' + esc(p.name) + (isMe ? ' <span class="you-tag">(you)</span>' : '') + '</span>'
-        + '<span class="participant-meta">' + meta + '</span>'
-        + '</div>'
-        + '</div>';
-    });
-    list.innerHTML = html;
-
-    actions.innerHTML = '<button class="btn btn-primary" onclick="StandupApp.resetStandup()">New Standup</button>';
+  function circleSvg() {
+    return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">'
+      + '<circle cx="12" cy="12" r="10"/>'
+      + '</svg>';
   }
 
   // ---- Actions ----
 
-  async function startStandup(shuffle) {
-    var data = await loadMeetingData();
-    if (!data || !data.participants) return;
-
-    var ids = Object.keys(data.participants);
-    if (ids.length === 0) return;
-
-    if (shuffle) {
-      for (var i = ids.length - 1; i > 0; i--) {
-        var j = Math.floor(Math.random() * (i + 1));
-        var tmp = ids[i]; ids[i] = ids[j]; ids[j] = tmp;
-      }
-    } else {
-      ids.sort(function (a, b) {
-        return (data.participants[a].joinedAt || 0) - (data.participants[b].joinedAt || 0);
-      });
-    }
-
-    Object.keys(data.participants).forEach(function (id) {
-      data.participants[id].status = 'waiting';
-    });
-    data.participants[ids[0]].status = 'speaking';
-
-    data.state = 'active';
-    data.speakingOrder = ids;
-    data.currentIndex = 0;
-    data.startedAt = Date.now();
-
-    await saveMeetingData(data);
-  }
-
-  async function advanceSpeaker() {
+  async function toggleDone(id) {
     await loadThenSave(function (data) {
-      if (data.state !== 'active') return data;
-
-      var order = data.speakingOrder || [];
-      var currentIdx = data.currentIndex || 0;
-
-      if (data.participants && data.participants[order[currentIdx]]) {
-        data.participants[order[currentIdx]].status = 'done';
+      if (data.participants && data.participants[id]) {
+        data.participants[id].done = !data.participants[id].done;
       }
-
-      var nextIdx = currentIdx + 1;
-      if (nextIdx < order.length) {
-        data.currentIndex = nextIdx;
-        if (data.participants && data.participants[order[nextIdx]]) {
-          data.participants[order[nextIdx]].status = 'speaking';
-        }
-      } else {
-        data.state = 'complete';
-      }
-
       return data;
     });
   }
 
-  async function skipSpeaker() {
+  async function start() {
     await loadThenSave(function (data) {
-      if (data.state !== 'active') return data;
-
-      var order = data.speakingOrder || [];
-      var currentIdx = data.currentIndex || 0;
-
-      if (data.participants && data.participants[order[currentIdx]]) {
-        data.participants[order[currentIdx]].status = 'skipped';
-      }
-
-      var nextIdx = currentIdx + 1;
-      if (nextIdx < order.length) {
-        data.currentIndex = nextIdx;
-        if (data.participants && data.participants[order[nextIdx]]) {
-          data.participants[order[nextIdx]].status = 'speaking';
-        }
-      } else {
-        data.state = 'complete';
-      }
-
+      data.startedAt = Date.now();
       return data;
     });
   }
 
-  async function resetStandup() {
+  async function reset() {
     await loadThenSave(function (data) {
       if (data.participants) {
         Object.keys(data.participants).forEach(function (id) {
-          data.participants[id].status = 'waiting';
+          data.participants[id].done = false;
         });
       }
-      data.state = 'lobby';
-      data.speakingOrder = null;
-      data.currentIndex = null;
       data.startedAt = null;
-      return data;
-    });
-  }
-
-  async function removeParticipant(id) {
-    await loadThenSave(function (data) {
-      if (data.participants) {
-        delete data.participants[id];
-      }
       return data;
     });
   }
@@ -679,13 +488,10 @@
 
   // ---- Public API ----
   window.StandupApp = {
-    startStandup: startStandup,
-    advanceSpeaker: advanceSpeaker,
-    skipSpeaker: skipSpeaker,
-    resetStandup: resetStandup,
-    removeParticipant: removeParticipant,
+    toggleDone: toggleDone,
+    start: start,
+    reset: reset,
   };
 
-  // ---- Boot ----
   document.addEventListener('DOMContentLoaded', init);
 })();

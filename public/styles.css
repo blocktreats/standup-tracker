@@ -699,6 +699,70 @@ footer {
   line-height: 1.6;
 }
 
+/* ---------- Check Toggle ---------- */
+
+.check-toggle {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  transition: all 0.2s var(--ease);
+}
+
+.check-toggle.checked {
+  color: var(--success);
+}
+
+.participant.clickable {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.participant.clickable:active {
+  transform: scale(0.98);
+}
+
+.participant.done {
+  opacity: 0.6;
+}
+
+.participant.done .participant-name {
+  text-decoration: line-through;
+  text-decoration-color: var(--text-tertiary);
+  color: var(--text-secondary);
+}
+
+.participant.done .participant-meta {
+  color: var(--success);
+}
+
+/* ---------- Complete Banner ---------- */
+
+.complete-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--success);
+  padding: 8px;
+  margin-bottom: 10px;
+  background: var(--success-soft);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.complete-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
 /* ---------- Scrollbar ---------- */
 
 main::-webkit-scrollbar {
