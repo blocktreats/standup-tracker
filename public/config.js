@@ -12,9 +12,5 @@ window.STANDUP_CONFIG = {
 
   // Google Cloud project number (numeric) — find in Google Cloud Console:
   // IAM & Admin > Settings > Project number
-  cloudProjectNumber: "650342594013",
-
-  // OAuth 2.0 Client ID — for auto-detecting user identity and fetching
-  // meeting participants via the Google Meet REST API
-  oauthClientId: "650342594013-84ssdr2o0g13dv0mor9hq4qm2a54atgl.apps.googleusercontent.com"
+  cloudProjectNumber: "650342594013"
 };

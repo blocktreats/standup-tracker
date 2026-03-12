@@ -1,6 +1,7 @@
 // ============================================
 // STANDUP TRACKER — Simple Checklist Mode
-// Auto-pulls names from Meet. Tap to mark done.
+// Auto-pulls names from Meet via backend proxy.
+// Tap to mark done. Syncs in real-time.
 // ============================================
 
 (function () {
@@ -11,7 +12,6 @@
   var meetingCode = null;
   var timerInterval = null;
   var channel = null;
-  var accessToken = null;
   var pollInterval = null;
 
   var $ = function (sel) { return document.querySelector(sel); };
@@ -76,114 +76,29 @@
       })
       .subscribe();
 
-    // Try to silently fetch participants from Meet API
-    if (meetingCode && config.oauthClientId && config.oauthClientId !== 'YOUR_OAUTH_CLIENT_ID') {
-      tryFetchParticipants(config.oauthClientId);
+    // Auto-fetch participants from Meet API via backend
+    if (meetingCode) {
+      fetchMeetParticipants();
+      pollInterval = setInterval(fetchMeetParticipants, 15000);
     }
   }
 
-  // ---- Meet API (silent OAuth, no sign-in UI) ----
-
-  function tryFetchParticipants(clientId) {
-    try {
-      var tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: clientId,
-        scope: 'https://www.googleapis.com/auth/meetings.space.readonly',
-        prompt: '',
-        callback: function (response) {
-          if (response.error) {
-            console.warn('Silent OAuth failed — showing import button');
-            showImportButton(clientId);
-            return;
-          }
-          accessToken = response.access_token;
-          fetchMeetParticipants();
-          // Poll every 30s for new joiners
-          if (pollInterval) clearInterval(pollInterval);
-          pollInterval = setInterval(fetchMeetParticipants, 15000);
-        },
-      });
-      tokenClient.requestAccessToken();
-    } catch (e) {
-      console.warn('GIS not available:', e);
-    }
-  }
-
-  function requestTokenWithConsent(clientId) {
-    try {
-      var tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: clientId,
-        scope: 'https://www.googleapis.com/auth/meetings.space.readonly',
-        callback: function (response) {
-          if (response.error) {
-            console.warn('OAuth consent failed:', response.error);
-            return;
-          }
-          accessToken = response.access_token;
-          // Remove the import button
-          var btn = $('#import-btn');
-          if (btn) btn.remove();
-          fetchMeetParticipants();
-          if (pollInterval) clearInterval(pollInterval);
-          pollInterval = setInterval(fetchMeetParticipants, 15000);
-        },
-      });
-      tokenClient.requestAccessToken();
-    } catch (e) {
-      console.warn('OAuth consent request failed:', e);
-    }
-  }
-
-  function showImportButton(clientId) {
-    // Only show if not already there
-    if ($('#import-btn')) return;
-    var header = $('header');
-    var btn = document.createElement('button');
-    btn.id = 'import-btn';
-    btn.className = 'btn btn-import';
-    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-      + '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>'
-      + '<circle cx="9" cy="7" r="4"/>'
-      + '<path d="M23 21v-2a4 4 0 0 0-3-3.87"/>'
-      + '<path d="M16 3.13a4 4 0 0 1 0 7.75"/>'
-      + '</svg> Import from Meet';
-    btn.addEventListener('click', function () {
-      requestTokenWithConsent(clientId);
-    });
-    header.appendChild(btn);
-  }
+  // ---- Meet API (via backend proxy) ----
 
   async function fetchMeetParticipants() {
-    if (!accessToken || !meetingCode) return;
+    if (!meetingCode) return;
     try {
-      var resp = await fetch(
-        'https://meet.googleapis.com/v2/conferenceRecords?filter=space.meeting_code%3D'
-        + encodeURIComponent(meetingCode),
-        { headers: { Authorization: 'Bearer ' + accessToken } }
-      );
+      var resp = await fetch('/api/participants?meetingCode=' + encodeURIComponent(meetingCode));
+      if (!resp.ok) {
+        console.warn('Backend returned', resp.status);
+        return;
+      }
       var data = await resp.json();
-      if (!data.conferenceRecords || data.conferenceRecords.length === 0) return;
-
-      var record = data.conferenceRecords[data.conferenceRecords.length - 1];
-
-      // Fetch all pages of participants
-      var allParticipants = [];
-      var nextPageToken = null;
-      do {
-        var url = 'https://meet.googleapis.com/v2/' + record.name + '/participants?pageSize=100';
-        if (nextPageToken) url += '&pageToken=' + encodeURIComponent(nextPageToken);
-        var partResp = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
-        var partData = await partResp.json();
-        if (partData.participants) {
-          allParticipants = allParticipants.concat(partData.participants);
-        }
-        nextPageToken = partData.nextPageToken || null;
-      } while (nextPageToken);
-
-      if (allParticipants.length === 0) return;
-      await mergeApiParticipants(allParticipants);
+      if (data.participants && data.participants.length > 0) {
+        await mergeApiParticipants(data.participants);
+      }
     } catch (e) {
-      console.error('Failed to fetch Meet participants:', e);
+      console.error('Failed to fetch participants from backend:', e);
     }
   }
 
@@ -194,29 +109,8 @@
 
     var changed = false;
     apiParticipants.forEach(function (p) {
-      var displayName = null;
-      var participantId = null;
-
-      if (p.signedinUser) {
-        displayName = p.signedinUser.displayName;
-        var userId = (p.signedinUser.user || '').replace('users/', '');
-        if (userId) participantId = 'google-' + userId;
-      } else if (p.anonymousUser) {
-        displayName = p.anonymousUser.displayName;
-      } else if (p.phoneUser) {
-        displayName = p.phoneUser.displayName;
-      }
-
-      if (!displayName) return;
-      if (!participantId) {
-        participantId = 'meet-' + displayName.toLowerCase().replace(/\s+/g, '-');
-      }
-
-      if (!meetingData.participants[participantId]) {
-        meetingData.participants[participantId] = {
-          name: displayName,
-          done: false,
-        };
+      if (!meetingData.participants[p.id]) {
+        meetingData.participants[p.id] = { name: p.name, done: false };
         changed = true;
       }
     });
