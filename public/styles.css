@@ -4,7 +4,7 @@
 
 :root {
   /* Datalinks color palette */
-  --bg-base: #0c0e12;
+  --bg-base: #1b1b1b;
   --bg-surface: rgba(11, 165, 236, 0.04);
   --bg-elevated: rgba(11, 165, 236, 0.07);
   --bg-hover: rgba(11, 165, 236, 0.10);
@@ -162,16 +162,18 @@ body > *:not(.bg-gradient) {
 }
 
 .overlay-icon {
-  width: 56px;
-  height: 56px;
+  width: 64px;
+  height: 64px;
   margin: 0 auto 16px;
-  background: var(--gradient-subtle);
-  border: 1px solid var(--accent-soft);
-  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--accent-light);
+}
+
+.overlay-icon img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
 }
 
 .overlay-card h2 {
@@ -217,7 +219,7 @@ header {
   padding: 16px 20px 12px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  background: rgba(12, 14, 20, 0.6);
+  background: rgba(27, 27, 27, 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
@@ -235,15 +237,17 @@ header {
 }
 
 .brand-icon {
-  width: 32px;
-  height: 32px;
-  background: var(--gradient);
-  border-radius: var(--radius-sm);
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  box-shadow: var(--shadow-glow);
+}
+
+.brand-icon img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
 }
 
 h1 {
@@ -436,6 +440,20 @@ main {
   color: var(--accent);
 }
 
+.speaking-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  object-fit: contain;
+  flex-shrink: 0;
+  animation: bounce 1s ease-in-out infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
 @keyframes speakingPulse {
   0%, 100% { box-shadow: 0 0 0 3px var(--bg-base), 0 0 0 5px var(--accent); }
   50% { box-shadow: 0 0 0 3px var(--bg-base), 0 0 0 7px var(--accent-glow); }
@@ -518,7 +536,7 @@ footer {
   padding: 16px;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
-  background: rgba(12, 14, 20, 0.6);
+  background: rgba(27, 27, 27, 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }

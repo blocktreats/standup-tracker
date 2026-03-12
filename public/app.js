@@ -443,12 +443,14 @@
       }
 
       var isMe = id === myId;
+      var capyIcon = (statusClass === 'speaking') ? '<img src="capy.png" class="speaking-icon" alt="">' : '';
       html += '<div class="participant ' + statusClass + (isMe ? ' is-me' : '') + '">'
         + avatarHtml(p.name)
         + '<div class="participant-info">'
         + '<span class="participant-name">' + esc(p.name) + (isMe ? ' <span class="you-tag">(you)</span>' : '') + '</span>'
         + '<span class="participant-meta">' + meta + '</span>'
         + '</div>'
+        + capyIcon
         + '</div>';
     });
 
