@@ -1,6 +1,6 @@
 // ============================================
 // STANDUP TRACKER — Google Meet Add-on
-// Powered by Supabase Realtime
+// Powered by Supabase Realtime + Google Meet API
 // ============================================
 
 (function () {
@@ -9,10 +9,13 @@
   // ---- State ----
   var sb; // Supabase client
   var meetingId = null;
+  var meetingCode = null;
   var myId = localStorage.getItem('standup-id');
   var myName = localStorage.getItem('standup-name') || '';
   var timerInterval = null;
   var channel = null;
+  var tokenClient = null;
+  var accessToken = null;
 
   if (!myId) {
     myId = crypto.randomUUID();
@@ -26,7 +29,7 @@
   async function init() {
     var config = window.STANDUP_CONFIG;
     if (!config || config.supabaseUrl === 'YOUR_SUPABASE_URL') {
-      showError('Please update config.js with your Supabase and Cloud project settings. See README.md.');
+      showError('Please update config.js with your Supabase settings. See README.md.');
       return;
     }
 
@@ -40,21 +43,187 @@
       var sidePanelClient = await meetSession.createSidePanelClient();
       var info = await sidePanelClient.getMeetingInfo();
       meetingId = sanitize(info.meetingId);
+      meetingCode = info.meetingCode;
     } catch (e) {
       console.warn('Meet SDK unavailable, using test mode:', e.message || e);
       meetingId = 'test-' + new Date().toISOString().slice(0, 10);
+      meetingCode = null;
     }
 
-    if (myName) {
+    // Google Identity Services
+    if (config.oauthClientId && config.oauthClientId !== 'YOUR_OAUTH_CLIENT_ID') {
+      initGoogleAuth(config.oauthClientId);
+    } else if (myName) {
       join();
     } else {
       showNamePrompt();
     }
   }
 
-  // ---- Name Prompt ----
+  // ---- Google Auth ----
 
-  function showNamePrompt() {
+  function initGoogleAuth(clientId) {
+    // One Tap: auto-detect user identity
+    try {
+      google.accounts.id.initialize({
+        client_id: clientId,
+        callback: handleCredentialResponse,
+        auto_select: true,
+        cancel_on_tap_outside: false,
+      });
+      google.accounts.id.prompt(function (notification) {
+        // If One Tap fails (dismissed, skipped, iframe issue), fall back
+        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+          console.warn('One Tap not shown:', notification.getNotDisplayedReason() || notification.getSkippedReason());
+          if (myName) {
+            joinAndFetchParticipants(clientId);
+          } else {
+            showNamePrompt(function () {
+              joinAndFetchParticipants(clientId);
+            });
+          }
+        }
+      });
+    } catch (e) {
+      console.warn('GIS init failed:', e);
+      if (myName) {
+        join();
+      } else {
+        showNamePrompt();
+      }
+    }
+  }
+
+  function handleCredentialResponse(response) {
+    // Decode ID token to get user info
+    try {
+      var payload = JSON.parse(atob(response.credential.split('.')[1]));
+      myName = payload.name || payload.email || myName;
+      myId = 'google-' + payload.sub;
+      localStorage.setItem('standup-id', myId);
+      localStorage.setItem('standup-name', myName);
+    } catch (e) {
+      console.warn('Failed to decode ID token:', e);
+    }
+
+    var config = window.STANDUP_CONFIG;
+    joinAndFetchParticipants(config.oauthClientId);
+  }
+
+  function joinAndFetchParticipants(clientId) {
+    // Join first so the user sees the UI immediately
+    join();
+
+    // Then try to fetch all participants via Meet API
+    if (meetingCode && clientId) {
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'https://www.googleapis.com/auth/meetings.space.readonly',
+        callback: handleTokenResponse,
+        prompt: '',
+      });
+      tokenClient.requestAccessToken();
+    }
+  }
+
+  function handleTokenResponse(response) {
+    if (response.error) {
+      console.warn('OAuth token error:', response.error);
+      return;
+    }
+    accessToken = response.access_token;
+    fetchMeetParticipants();
+  }
+
+  async function fetchMeetParticipants() {
+    if (!accessToken || !meetingCode) return;
+
+    try {
+      // Find conference record for this meeting code
+      var resp = await fetch(
+        'https://meet.googleapis.com/v2/conferenceRecords?filter=space.meeting_code%3D'
+        + encodeURIComponent(meetingCode),
+        { headers: { Authorization: 'Bearer ' + accessToken } }
+      );
+      var data = await resp.json();
+
+      if (!data.conferenceRecords || data.conferenceRecords.length === 0) {
+        console.warn('No conference records found for meeting code:', meetingCode);
+        return;
+      }
+
+      // Use the most recent conference record
+      var record = data.conferenceRecords[data.conferenceRecords.length - 1];
+
+      // Fetch participants
+      var partResp = await fetch(
+        'https://meet.googleapis.com/v2/' + record.name + '/participants',
+        { headers: { Authorization: 'Bearer ' + accessToken } }
+      );
+      var partData = await partResp.json();
+
+      if (!partData.participants || partData.participants.length === 0) {
+        console.warn('No participants returned from Meet API');
+        return;
+      }
+
+      // Merge API participants into the meeting data
+      await mergeApiParticipants(partData.participants);
+
+    } catch (e) {
+      console.error('Failed to fetch Meet participants:', e);
+    }
+  }
+
+  async function mergeApiParticipants(apiParticipants) {
+    var meetingData = await loadMeetingData();
+    if (!meetingData) return;
+    if (!meetingData.participants) meetingData.participants = {};
+
+    var changed = false;
+
+    apiParticipants.forEach(function (p) {
+      var displayName = null;
+      var participantId = null;
+
+      if (p.signedinUser) {
+        displayName = p.signedinUser.displayName;
+        var userId = (p.signedinUser.user || '').replace('users/', '');
+        if (userId) {
+          participantId = 'google-' + userId;
+        }
+      } else if (p.anonymousUser) {
+        displayName = p.anonymousUser.displayName;
+      } else if (p.phoneUser) {
+        displayName = p.phoneUser.displayName;
+      }
+
+      if (!displayName) return;
+      if (!participantId) {
+        participantId = 'meet-' + displayName.toLowerCase().replace(/\s+/g, '-');
+      }
+
+      // Only add if not already present
+      if (!meetingData.participants[participantId]) {
+        meetingData.participants[participantId] = {
+          name: displayName,
+          status: 'waiting',
+          joinedAt: p.earliestStartTime
+            ? new Date(p.earliestStartTime).getTime()
+            : Date.now(),
+        };
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      await saveMeetingData(meetingData);
+    }
+  }
+
+  // ---- Name Prompt (fallback when GIS unavailable) ----
+
+  function showNamePrompt(onComplete) {
     $('#loading').classList.add('hidden');
     $('#name-overlay').classList.remove('hidden');
     var input = $('#name-input');
@@ -70,7 +239,11 @@
       localStorage.setItem('standup-name', myName);
       $('#name-overlay').classList.add('hidden');
       $('#loading').classList.remove('hidden');
-      join();
+      if (onComplete) {
+        onComplete();
+      } else {
+        join();
+      }
     };
 
     $('#name-submit').addEventListener('click', submit);
@@ -113,7 +286,6 @@
     if (error) console.error('Save error:', error);
   }
 
-  // Read-modify-write helper
   async function loadThenSave(modifyFn) {
     var data = await loadMeetingData();
     if (!data) return;
@@ -124,7 +296,6 @@
   // ---- Join Meeting ----
 
   async function join() {
-    // Get or create meeting row
     var existing = await loadMeetingData();
     var meetingData;
 
@@ -134,15 +305,15 @@
       meetingData = existing;
     }
 
-    // Add self
     if (!meetingData.participants) meetingData.participants = {};
+
+    // Add or update self
     if (!meetingData.participants[myId]) {
       meetingData.participants[myId] = {
         name: myName,
         status: 'waiting',
         joinedAt: Date.now(),
       };
-      // If standup already active, append to speaking order
       if (meetingData.state === 'active') {
         if (!meetingData.speakingOrder) meetingData.speakingOrder = [];
         if (meetingData.speakingOrder.indexOf(myId) === -1) {
@@ -161,7 +332,6 @@
     $('#my-name-display').textContent = myName;
     $('#change-name').addEventListener('click', changeName);
 
-    // Initial render
     render(meetingData);
 
     // Subscribe to real-time changes
@@ -190,7 +360,6 @@
     var order = data.speakingOrder || [];
     var currentIndex = data.currentIndex || 0;
 
-    // Timer
     var timerEl = $('#timer');
     if (state === 'active' && data.startedAt) {
       timerEl.classList.remove('hidden');
@@ -219,13 +388,16 @@
       html = '<div class="empty-state">Waiting for participants to join...</div>';
     } else {
       html = '<div class="section-label">Participants (' + sorted.length + ')</div>';
-      sorted.forEach(function (entry, i) {
+      sorted.forEach(function (entry) {
         var id = entry[0];
         var p = entry[1];
         var isMe = id === myId;
         html += '<div class="participant' + (isMe ? ' is-me' : '') + '">'
-          + '<span class="participant-number">' + (i + 1) + '</span>'
-          + '<span class="participant-name">' + esc(p.name) + (isMe ? ' (you)' : '') + '</span>'
+          + avatarHtml(p.name)
+          + '<div class="participant-info">'
+          + '<span class="participant-name">' + esc(p.name) + (isMe ? ' <span class="you-tag">(you)</span>' : '') + '</span>'
+          + '<span class="participant-meta">Ready</span>'
+          + '</div>'
           + (isMe ? '' : '<button class="remove-btn" onclick="StandupApp.removeParticipant(\'' + id + '\')" title="Remove">&times;</button>')
           + '</div>';
       });
@@ -255,37 +427,42 @@
       var p = participants[id];
       if (!p) return;
 
-      var statusClass, statusIcon;
+      var statusClass, meta;
       if (p.status === 'skipped') {
         statusClass = 'skipped';
-        statusIcon = '&#8211;';
+        meta = 'Skipped';
       } else if (i < currentIndex) {
         statusClass = 'done';
-        statusIcon = '&#10003;';
+        meta = 'Done';
       } else if (i === currentIndex) {
         statusClass = 'speaking';
-        statusIcon = '&#9654;';
+        meta = 'Speaking now';
       } else {
         statusClass = 'waiting';
-        statusIcon = '&#8226;';
+        meta = 'Up next';
       }
 
       var isMe = id === myId;
       html += '<div class="participant ' + statusClass + (isMe ? ' is-me' : '') + '">'
-        + '<span class="participant-status">' + statusIcon + '</span>'
-        + '<span class="participant-name">' + esc(p.name) + (isMe ? ' (you)' : '') + '</span>'
+        + avatarHtml(p.name)
+        + '<div class="participant-info">'
+        + '<span class="participant-name">' + esc(p.name) + (isMe ? ' <span class="you-tag">(you)</span>' : '') + '</span>'
+        + '<span class="participant-meta">' + meta + '</span>'
+        + '</div>'
         + '</div>';
     });
 
-    // Late joiners not in speaking order
     Object.entries(participants).forEach(function (entry) {
       var id = entry[0];
       var p = entry[1];
       if (order.indexOf(id) === -1) {
         var isMe = id === myId;
         html += '<div class="participant waiting' + (isMe ? ' is-me' : '') + '">'
-          + '<span class="participant-status">&#8226;</span>'
-          + '<span class="participant-name">' + esc(p.name) + (isMe ? ' (you)' : '') + ' (joined late)</span>'
+          + avatarHtml(p.name)
+          + '<div class="participant-info">'
+          + '<span class="participant-name">' + esc(p.name) + (isMe ? ' <span class="you-tag">(you)</span>' : '') + '</span>'
+          + '<span class="participant-meta">Joined late</span>'
+          + '</div>'
           + '</div>';
       }
     });
@@ -312,10 +489,13 @@
       if (!p) return;
       var isMe = id === myId;
       var statusClass = p.status === 'skipped' ? 'skipped' : 'done';
-      var statusIcon = p.status === 'skipped' ? '&#8211;' : '&#10003;';
+      var meta = p.status === 'skipped' ? 'Skipped' : 'Done';
       html += '<div class="participant ' + statusClass + '">'
-        + '<span class="participant-status">' + statusIcon + '</span>'
-        + '<span class="participant-name">' + esc(p.name) + (isMe ? ' (you)' : '') + '</span>'
+        + avatarHtml(p.name)
+        + '<div class="participant-info">'
+        + '<span class="participant-name">' + esc(p.name) + (isMe ? ' <span class="you-tag">(you)</span>' : '') + '</span>'
+        + '<span class="participant-meta">' + meta + '</span>'
+        + '</div>'
         + '</div>';
     });
     list.innerHTML = html;
@@ -343,7 +523,6 @@
       });
     }
 
-    // Reset all statuses and mark first speaker
     Object.keys(data.participants).forEach(function (id) {
       data.participants[id].status = 'waiting';
     });
@@ -472,6 +651,28 @@
 
   function showError(msg) {
     $('#loading').innerHTML = '<div class="error">' + esc(msg) + '</div>';
+  }
+
+  function getInitials(name) {
+    return (name || '?').split(' ').map(function (w) { return w[0]; }).join('').toUpperCase().slice(0, 2);
+  }
+
+  var avatarColors = [
+    '#0ba5ec', '#0086c9', '#026aa2', '#36bffa', '#7cd4fd',
+    '#065986', '#0b4a6f', '#14b8a6', '#10b981', '#06b6d4',
+    '#3b82f6', '#b9e6fe',
+  ];
+
+  function getAvatarColor(name) {
+    var hash = 0;
+    for (var i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return avatarColors[Math.abs(hash) % avatarColors.length];
+  }
+
+  function avatarHtml(name) {
+    return '<div class="avatar" style="background:' + getAvatarColor(name) + '">' + esc(getInitials(name)) + '</div>';
   }
 
   // ---- Public API ----
