@@ -244,13 +244,13 @@
       var elapsed = Math.floor((Date.now() - data.startedAt) / 1000);
       actions.innerHTML = '<div class="complete-banner">'
         + '<img src="capy-su.png" alt="" width="24" height="24" class="complete-icon">'
-        + ' All done in ' + formatTime(elapsed) + ' — please stay alive.'
+        + ' All done in ' + formatTime(elapsed) + '! Please stay alive!'
         + '</div>'
         + '<button class="btn btn-primary btn-glow" onclick="StandupApp.reset()">New Standup</button>';
     } else if (allDone) {
       actions.innerHTML = '<div class="complete-banner">'
         + '<img src="capy-su.png" alt="" width="24" height="24" class="complete-icon">'
-        + ' All done — please stay alive.'
+        + ' All done! Please stay alive!'
         + '</div>'
         + '<button class="btn btn-primary btn-glow" onclick="StandupApp.reset()">New Standup</button>';
     } else if (hasStarted) {
