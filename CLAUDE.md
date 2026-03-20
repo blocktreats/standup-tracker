@@ -1,4 +1,4 @@
-# Standup Tracker (WorkUp) — Project Context
+# Standup Tracker (CapyUp) — Project Context
 
 ## What This Is
 

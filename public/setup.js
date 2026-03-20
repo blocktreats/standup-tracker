@@ -21,14 +21,14 @@
       var domain = params.get('domain');
       if (domain) {
         document.getElementById('success-message').textContent =
-          domain + ' has been linked to WorkUp. Participants from your org will now be auto-detected.';
+          domain + ' has been linked to CapyUp. Participants from your org will now be auto-detected.';
       }
     } else if (params.get('error')) {
       showView('error');
       var error = params.get('error');
       var msg = 'There was a problem connecting your account.';
       if (error === 'access_denied') {
-        msg = 'You declined the permission request. WorkUp needs meeting access to auto-detect participants.';
+        msg = 'You declined the permission request. CapyUp needs meeting access to auto-detect participants.';
       } else if (error === 'no_refresh_token') {
         msg = 'Google did not provide a refresh token. Please try again — make sure to click "Allow" on the consent screen.';
       } else if (error !== 'unknown') {

@@ -2,10 +2,10 @@
 
 ## How Multi-Org Works
 
-WorkUp supports any Google Workspace organization. There are two things an external org needs:
+CapyUp supports any Google Workspace organization. There are two things an external org needs:
 
 1. **Install the add-on** — so it appears in their Google Meet
-2. **Connect their account** — so WorkUp can auto-detect meeting participants
+2. **Connect their account** — so CapyUp can auto-detect meeting participants
 
 ## Step 1: Install the Add-on
 
@@ -30,8 +30,8 @@ WorkUp supports any Google Workspace organization. There are two things an exter
 1. One person from the external org visits **https://standup-tracker-three.vercel.app/setup.html**
 2. They click "Connect with Google" and sign in with their Workspace account
 3. They grant the `meetings.space.readonly` permission
-4. WorkUp stores a refresh token for their org domain
-5. From then on, WorkUp can auto-detect participants in any meeting where that person is present
+4. CapyUp stores a refresh token for their org domain
+5. From then on, CapyUp can auto-detect participants in any meeting where that person is present
 
 ### Important
 - The connected person must be **present in the meeting** for auto-detect to work (Google API limitation)
