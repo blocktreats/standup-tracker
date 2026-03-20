@@ -4,6 +4,7 @@
   "private": true,
   "description": "Google Meet add-on for tracking standup speakers, powered by Supabase",
   "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
     "google-auth-library": "^9.0.0"
   }
 }

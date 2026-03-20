@@ -1,4 +1,5 @@
 const { getAccessToken } = require('./_lib/google-auth');
+const { getAllOrgTokens, getOrgAccessToken } = require('./_lib/oauth-tokens');
 
 const ALLOWED_ORIGINS = [
   'https://standup-tracker-three.vercel.app',
@@ -24,64 +25,85 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const token = await getAccessToken();
-
-    // Find conference record for this meeting code
-    const crResp = await fetch(
-      'https://meet.googleapis.com/v2/conferenceRecords?filter=space.meeting_code%3D' + meetingCode,
-      { headers: { Authorization: 'Bearer ' + token } }
-    );
-    const crData = await crResp.json();
-
-    if (crData.error) {
-      return res.status(502).json({ error: 'Meet API error', detail: crData.error.message || JSON.stringify(crData.error) });
+    // 1. Try the service account first (your org)
+    let result = await fetchParticipantsWithToken(meetingCode, await getAccessToken());
+    if (result.length > 0) {
+      return res.status(200).json({ participants: result });
     }
 
-    if (!crData.conferenceRecords || crData.conferenceRecords.length === 0) {
-      return res.status(200).json({ participants: [] });
-    }
+    // 2. Try stored org tokens
+    const orgTokens = await getAllOrgTokens();
+    for (const orgToken of orgTokens) {
+      try {
+        const accessToken = await getOrgAccessToken(orgToken);
+        if (!accessToken) continue;
 
-    const record = crData.conferenceRecords[crData.conferenceRecords.length - 1];
-
-    // Fetch all participants (paginated)
-    let allParticipants = [];
-    let nextPageToken = null;
-    do {
-      let url = 'https://meet.googleapis.com/v2/' + record.name + '/participants?pageSize=100';
-      if (nextPageToken) url += '&pageToken=' + encodeURIComponent(nextPageToken);
-      const pResp = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-      const pData = await pResp.json();
-      if (pData.participants) allParticipants = allParticipants.concat(pData.participants);
-      nextPageToken = pData.nextPageToken || null;
-    } while (nextPageToken);
-
-    // Extract display names and deduplicate
-    const seen = new Set();
-    const result = [];
-    for (const p of allParticipants) {
-      let displayName = null;
-      let participantId = null;
-
-      if (p.signedinUser) {
-        displayName = p.signedinUser.displayName;
-        const userId = (p.signedinUser.user || '').replace('users/', '');
-        if (userId) participantId = 'google-' + userId;
-      } else if (p.anonymousUser) {
-        displayName = p.anonymousUser.displayName;
-      } else if (p.phoneUser) {
-        displayName = p.phoneUser.displayName;
+        result = await fetchParticipantsWithToken(meetingCode, accessToken);
+        if (result.length > 0) {
+          return res.status(200).json({ participants: result });
+        }
+      } catch (err) {
+        console.warn(`Token for ${orgToken.domain} failed:`, err.message);
       }
-
-      if (!displayName) continue;
-      if (!participantId) participantId = 'meet-' + displayName.toLowerCase().replace(/\s+/g, '-');
-      if (seen.has(participantId)) continue;
-      seen.add(participantId);
-      result.push({ id: participantId, name: displayName });
     }
 
-    return res.status(200).json({ participants: result });
+    // 3. No token found participants — return empty
+    return res.status(200).json({ participants: [] });
   } catch (err) {
     console.error('Meet API error:', err.message || err);
     return res.status(500).json({ error: 'Failed to fetch participants', detail: err.message || String(err) });
   }
 };
+
+async function fetchParticipantsWithToken(meetingCode, token) {
+  // Find conference record for this meeting code
+  const crResp = await fetch(
+    'https://meet.googleapis.com/v2/conferenceRecords?filter=space.meeting_code%3D' + meetingCode,
+    { headers: { Authorization: 'Bearer ' + token } }
+  );
+  const crData = await crResp.json();
+
+  if (crData.error || !crData.conferenceRecords || crData.conferenceRecords.length === 0) {
+    return [];
+  }
+
+  const record = crData.conferenceRecords[crData.conferenceRecords.length - 1];
+
+  // Fetch all participants (paginated)
+  let allParticipants = [];
+  let nextPageToken = null;
+  do {
+    let url = 'https://meet.googleapis.com/v2/' + record.name + '/participants?pageSize=100';
+    if (nextPageToken) url += '&pageToken=' + encodeURIComponent(nextPageToken);
+    const pResp = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+    const pData = await pResp.json();
+    if (pData.participants) allParticipants = allParticipants.concat(pData.participants);
+    nextPageToken = pData.nextPageToken || null;
+  } while (nextPageToken);
+
+  // Extract display names and deduplicate
+  const seen = new Set();
+  const result = [];
+  for (const p of allParticipants) {
+    let displayName = null;
+    let participantId = null;
+
+    if (p.signedinUser) {
+      displayName = p.signedinUser.displayName;
+      const userId = (p.signedinUser.user || '').replace('users/', '');
+      if (userId) participantId = 'google-' + userId;
+    } else if (p.anonymousUser) {
+      displayName = p.anonymousUser.displayName;
+    } else if (p.phoneUser) {
+      displayName = p.phoneUser.displayName;
+    }
+
+    if (!displayName) continue;
+    if (!participantId) participantId = 'meet-' + displayName.toLowerCase().replace(/\s+/g, '-');
+    if (seen.has(participantId)) continue;
+    seen.add(participantId);
+    result.push({ id: participantId, name: displayName });
+  }
+
+  return result;
+}

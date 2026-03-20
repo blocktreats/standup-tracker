@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — Standup Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #1b1b1b;
+      --bg-surface: rgba(11, 165, 236, 0.04);
+      --border: rgba(55, 58, 65, 0.6);
+      --border-strong: rgba(148, 151, 156, 0.2);
+      --text-primary: #f7f7f7;
+      --text-secondary: #94979c;
+      --text-tertiary: #61656c;
+      --accent: #0ba5ec;
+      --accent-light: #36bffa;
+      --accent-soft: rgba(11, 165, 236, 0.15);
+      --gradient: linear-gradient(135deg, #026aa2 0%, #0ba5ec 50%, #36bffa 100%);
+      --font: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-size: 15px;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .bg-gradient {
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% -20%, rgba(11, 165, 236, 0.10) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 100% 100%, rgba(2, 106, 162, 0.08) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 40px;
+    }
+
+    .brand img {
+      width: 48px;
+      height: 48px;
+      object-fit: contain;
+    }
+
+    .brand span {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 8px;
+      background: var(--gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .effective-date {
+      color: var(--text-tertiary);
+      font-size: 13px;
+      margin-bottom: 32px;
+    }
+
+    h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-top: 32px;
+      margin-bottom: 12px;
+      color: var(--accent-light);
+    }
+
+    p, li {
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+    }
+
+    ul {
+      padding-left: 20px;
+      margin-bottom: 16px;
+    }
+
+    li { margin-bottom: 6px; }
+
+    a {
+      color: var(--accent-light);
+      text-decoration: none;
+    }
+
+    a:hover { text-decoration: underline; }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 40px 0;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+      margin-top: 40px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+    }
+
+    .footer-links a { color: var(--text-tertiary); }
+    .footer-links a:hover { color: var(--accent-light); }
+  </style>
+</head>
+<body>
+  <div class="bg-gradient"></div>
+  <div class="container">
+    <div class="brand">
+      <img src="capy-su.png" alt="Standup Tracker">
+      <span>Standup Tracker</span>
+    </div>
+
+    <h1>Privacy Policy</h1>
+    <p class="effective-date">Effective date: March 17, 2026</p>
+
+    <p>Standup Tracker is an experimental, open-source Google Meet add-on. We are not a business, we do not monetize this project, and we have no interest in collecting or profiting from your data.</p>
+
+    <h2>What We Collect</h2>
+    <p>Standup Tracker processes the minimum data needed to function:</p>
+    <ul>
+      <li><strong>Meeting identifiers</strong> — A Google Meet meeting code is used to create a shared session so participants can see the same checklist.</li>
+      <li><strong>Participant display names</strong> — Names shown in Google Meet are fetched via the Google Meet API to populate the checklist. These are the same names visible to all meeting participants.</li>
+      <li><strong>Checklist state</strong> — Which participants have been marked as "done" during a standup session.</li>
+    </ul>
+
+    <h2>What We Do NOT Collect</h2>
+    <ul>
+      <li>Email addresses</li>
+      <li>Audio, video, or meeting content</li>
+      <li>Google account credentials or tokens from end users</li>
+      <li>Analytics, telemetry, or usage tracking</li>
+      <li>Cookies or advertising identifiers</li>
+    </ul>
+
+    <h2>How Data Is Stored</h2>
+    <p>Session data (meeting ID, participant names, checklist state) is stored in a Supabase-hosted PostgreSQL database for the duration of the meeting session. This data is not associated with any user account and is not used for any purpose beyond powering the real-time checklist.</p>
+    <p>Data is retained only as long as needed for the session to function. We do not perform long-term storage, archiving, or analysis of meeting data.</p>
+
+    <h2>Third-Party Services</h2>
+    <p>Standup Tracker uses the following third-party services to operate:</p>
+    <ul>
+      <li><strong>Google Meet API</strong> — To retrieve participant names for the active meeting.</li>
+      <li><strong>Supabase</strong> — For real-time database storage and synchronization.</li>
+      <li><strong>Vercel</strong> — For hosting the application.</li>
+    </ul>
+    <p>We do not share your data with any other third parties, advertisers, or data brokers.</p>
+
+    <h2>Data Security</h2>
+    <p>All communication between the add-on and our servers occurs over HTTPS. Access to the backend infrastructure is restricted to the project maintainers. However, as an experimental project provided as-is, we cannot guarantee the security of any data processed by this application. Please see our <a href="terms.html">Terms of Service</a> for important disclaimers.</p>
+
+    <h2>Children's Privacy</h2>
+    <p>Standup Tracker is not directed at children under 13 and does not knowingly collect personal information from children.</p>
+
+    <h2>Changes to This Policy</h2>
+    <p>We may update this policy from time to time. Changes will be reflected on this page with an updated effective date. Continued use of the add-on after changes constitutes acceptance of the revised policy.</p>
+
+    <h2>Contact</h2>
+    <p>If you have questions about this privacy policy, you can open an issue on our <a href="https://github.com/blocktreats/standup-tracker">GitHub repository</a>.</p>
+
+    <div class="footer-links">
+      <a href="terms.html">Terms of Service</a>
+      <a href="https://github.com/blocktreats/standup-tracker">GitHub</a>
+    </div>
+  </div>
+</body>
+</html>

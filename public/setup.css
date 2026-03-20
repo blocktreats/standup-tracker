@@ -1,0 +1,307 @@
+/* ============================================
+   WORKUP — Setup Page Styles
+   Matches the main app's dark theme
+   ============================================ */
+
+:root {
+  --bg-base: #1b1b1b;
+  --bg-surface: rgba(11, 165, 236, 0.04);
+  --bg-elevated: rgba(11, 165, 236, 0.07);
+  --bg-hover: rgba(11, 165, 236, 0.10);
+  --border: rgba(55, 58, 65, 0.6);
+  --border-strong: rgba(148, 151, 156, 0.2);
+  --text-primary: #f7f7f7;
+  --text-secondary: #94979c;
+  --text-tertiary: #61656c;
+  --accent: #0ba5ec;
+  --accent-light: #36bffa;
+  --accent-dark: #0086c9;
+  --accent-soft: rgba(11, 165, 236, 0.15);
+  --accent-glow: rgba(11, 165, 236, 0.35);
+  --success: #10b981;
+  --success-soft: rgba(16, 185, 129, 0.15);
+  --error: #ef4444;
+  --error-soft: rgba(239, 68, 68, 0.15);
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.6);
+  --font: 'Inter', system-ui, -apple-system, sans-serif;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.6;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-font-smoothing: antialiased;
+}
+
+.bg-gradient {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -20%, rgba(11, 165, 236, 0.10) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(2, 106, 162, 0.08) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ---------- Layout ---------- */
+
+.setup-container {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 520px;
+  padding: 24px;
+}
+
+/* ---------- Header / Brand ---------- */
+
+.setup-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.brand-icon {
+  border-radius: 12px;
+  box-shadow: 0 0 20px rgba(11, 165, 236, 0.2);
+}
+
+.brand h1 {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #36bffa, #0ba5ec);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.tagline {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-top: 2px;
+}
+
+/* ---------- Card ---------- */
+
+.setup-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(12px);
+}
+
+.setup-card h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.setup-card > p {
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+}
+
+/* ---------- Info box ---------- */
+
+.info-box {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  background: var(--accent-soft);
+  border: 1px solid rgba(11, 165, 236, 0.2);
+  border-radius: var(--radius-md);
+  margin-bottom: 28px;
+}
+
+.info-box svg {
+  flex-shrink: 0;
+  color: var(--accent-light);
+  margin-top: 2px;
+}
+
+.info-box strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--accent-light);
+}
+
+.info-box p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* ---------- Buttons ---------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 28px;
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s var(--ease);
+  width: 100%;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent-dark), var(--accent));
+  color: white;
+  box-shadow: 0 2px 12px var(--accent-glow);
+}
+
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 0 4px 24px var(--accent-glow);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-hover);
+}
+
+.fine-print {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  text-align: center;
+  margin-top: 16px;
+}
+
+/* ---------- Success state ---------- */
+
+.success-icon, .error-icon {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.success-icon svg {
+  filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.4));
+}
+
+.error-icon svg {
+  filter: drop-shadow(0 0 12px rgba(239, 68, 68, 0.4));
+}
+
+#view-success h2, #view-error h2 {
+  text-align: center;
+}
+
+#view-success > p, #view-error > p {
+  text-align: center;
+}
+
+/* ---------- Next steps ---------- */
+
+.next-steps {
+  margin-top: 24px;
+  padding: 20px;
+  background: var(--success-soft);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: var(--radius-md);
+}
+
+.next-steps h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--success);
+  margin-bottom: 12px;
+}
+
+.next-steps ol {
+  padding-left: 20px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.next-steps li {
+  margin-bottom: 8px;
+}
+
+.next-steps li:last-child {
+  margin-bottom: 0;
+}
+
+/* ---------- Footer ---------- */
+
+.setup-footer {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 24px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.setup-footer a {
+  color: var(--text-tertiary);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.setup-footer a:hover {
+  color: var(--accent-light);
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 560px) {
+  .setup-container {
+    padding: 16px;
+  }
+  .setup-card {
+    padding: 24px 20px;
+  }
+  .brand h1 {
+    font-size: 24px;
+  }
+}

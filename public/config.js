@@ -12,5 +12,9 @@ window.STANDUP_CONFIG = {
 
   // Google Cloud project number (numeric) — find in Google Cloud Console:
   // IAM & Admin > Settings > Project number
-  cloudProjectNumber: "650342594013"
+  cloudProjectNumber: "650342594013",
+
+  // OAuth 2.0 Client ID — used by the /setup page for external org onboarding.
+  // Create at: Google Cloud Console > APIs & Services > Credentials > Create OAuth client ID
+  oauthClientId: "650342594013-1uak7kuhe5jt7603440jqc751kmpf218.apps.googleusercontent.com"
 };
