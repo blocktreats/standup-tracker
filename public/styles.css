@@ -833,6 +833,58 @@ footer {
   color: var(--success);
 }
 
+/* ---------- Skip Button ---------- */
+
+.skip-btn {
+  opacity: 0;
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 14px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s var(--ease);
+  flex-shrink: 0;
+}
+
+.participant:hover .skip-btn {
+  opacity: 1;
+}
+
+.participant.skipped .skip-btn {
+  opacity: 1;
+  color: var(--warning);
+}
+
+.skip-btn:hover {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.participant.skipped {
+  opacity: 0.45;
+}
+
+.participant.skipped .participant-name {
+  text-decoration: line-through;
+  text-decoration-color: var(--text-tertiary);
+  color: var(--text-tertiary);
+}
+
+.participant.skipped .participant-meta {
+  color: var(--warning);
+}
+
+.participant.skipped .check-toggle {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
 /* ---------- Complete Banner ---------- */
 
 .complete-banner {

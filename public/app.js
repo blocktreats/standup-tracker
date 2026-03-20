@@ -177,13 +177,27 @@
     var list = $('#participant-list');
     var actions = $('#actions');
 
+    // Use shuffled order if it exists, otherwise sort alphabetically
+    var order = data.shuffledOrder || null;
     var entries = Object.entries(participants).sort(function (a, b) {
+      // Skipped always at bottom
+      if (a[1].skipped !== b[1].skipped) return a[1].skipped ? 1 : -1;
+      // Done above skipped but below waiting
       if (a[1].done !== b[1].done) return a[1].done ? 1 : -1;
+      // If shuffled, use shuffle order
+      if (order) {
+        var ai = order.indexOf(a[0]);
+        var bi = order.indexOf(b[0]);
+        if (ai === -1) ai = 9999;
+        if (bi === -1) bi = 9999;
+        return ai - bi;
+      }
       return (a[1].name || '').localeCompare(b[1].name || '');
     });
 
-    var total = entries.length;
-    var doneCount = entries.filter(function (e) { return e[1].done; }).length;
+    var activeEntries = entries.filter(function (e) { return !e[1].skipped; });
+    var total = activeEntries.length;
+    var doneCount = activeEntries.filter(function (e) { return e[1].done; }).length;
 
     var html = '';
     if (total === 0) {
@@ -197,20 +211,24 @@
       entries.forEach(function (entry) {
         var id = entry[0];
         var p = entry[1];
-        var statusClass = p.done ? 'done' : 'waiting';
+        var statusClass = p.skipped ? 'skipped' : (p.done ? 'done' : 'waiting');
+        var statusText = p.skipped ? 'Skipped' : (p.done ? 'Done' : 'Waiting');
 
         html += '<div class="participant clickable ' + statusClass + '">'
           + '<div class="participant-left" onclick="StandupApp.toggleDone(\'' + id + '\')">'
           + avatarHtml(p.name)
           + '<div class="participant-info">'
           + '<span class="participant-name">' + esc(p.name) + '</span>'
-          + '<span class="participant-meta">' + (p.done ? 'Done' : 'Waiting') + '</span>'
+          + '<span class="participant-meta">' + statusText + '</span>'
           + '</div>'
           + '</div>'
           + '<div class="participant-right">'
           + '<div class="check-toggle ' + (p.done ? 'checked' : '') + '" onclick="StandupApp.toggleDone(\'' + id + '\')">'
           + (p.done ? checkSvg() : circleSvg())
           + '</div>'
+          + '<button class="skip-btn" onclick="StandupApp.toggleSkip(\'' + id + '\')" title="' + (p.skipped ? 'Unskip' : 'Skip') + '">'
+          + skipSvg(p.skipped)
+          + '</button>'
           + '<button class="remove-btn" onclick="StandupApp.remove(\'' + id + '\')" title="Remove">&times;</button>'
           + '</div>'
           + '</div>';
@@ -236,10 +254,15 @@
         + '</div>'
         + '<button class="btn btn-primary btn-glow" onclick="StandupApp.reset()">New Standup</button>';
     } else if (hasStarted) {
-      actions.innerHTML = '<button class="btn btn-secondary" onclick="StandupApp.reset()">Reset</button>';
+      actions.innerHTML = '<div class="action-buttons">'
+        + '<button class="btn btn-secondary" onclick="StandupApp.shuffle()" title="Shuffle order">' + shuffleSvg() + ' Shuffle</button>'
+        + '<button class="btn btn-secondary" onclick="StandupApp.reset()">Reset</button>'
+        + '</div>';
     } else {
-      actions.innerHTML = '<button class="btn btn-primary btn-glow" onclick="StandupApp.start()"'
-        + (total === 0 ? ' disabled' : '') + '>Start Standup</button>';
+      actions.innerHTML = '<div class="action-buttons">'
+        + '<button class="btn btn-secondary" onclick="StandupApp.shuffle()" title="Shuffle order"' + (total === 0 ? ' disabled' : '') + '>' + shuffleSvg() + ' Shuffle</button>'
+        + '<button class="btn btn-primary" onclick="StandupApp.start()"' + (total === 0 ? ' disabled' : '') + '>Start Standup</button>'
+        + '</div>';
     }
   }
 
@@ -256,11 +279,36 @@
       + '</svg>';
   }
 
+  function skipSvg(isSkipped) {
+    if (isSkipped) {
+      // Undo/unskip icon
+      return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        + '<polyline points="1 4 1 10 7 10"/>'
+        + '<path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>'
+        + '</svg>';
+    }
+    // Skip icon (forward arrow)
+    return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+      + '<polygon points="5 4 15 12 5 20 5 4"/>'
+      + '<line x1="19" y1="5" x2="19" y2="19"/>'
+      + '</svg>';
+  }
+
+  function shuffleSvg() {
+    return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+      + '<polyline points="16 3 21 3 21 8"/>'
+      + '<line x1="4" y1="20" x2="21" y2="3"/>'
+      + '<polyline points="21 16 21 21 16 21"/>'
+      + '<line x1="15" y1="15" x2="21" y2="21"/>'
+      + '<line x1="4" y1="4" x2="9" y2="9"/>'
+      + '</svg>';
+  }
+
   // ---- Actions ----
 
   async function toggleDone(id) {
     await loadThenSave(function (data) {
-      if (data.participants && data.participants[id]) {
+      if (data.participants && data.participants[id] && !data.participants[id].skipped) {
         data.participants[id].done = !data.participants[id].done;
       }
       return data;
@@ -270,6 +318,40 @@
   async function removeParticipant(id) {
     await loadThenSave(function (data) {
       if (data.participants) delete data.participants[id];
+      // Remove from shuffle order too
+      if (data.shuffledOrder) {
+        data.shuffledOrder = data.shuffledOrder.filter(function (x) { return x !== id; });
+      }
+      return data;
+    });
+  }
+
+  async function toggleSkip(id) {
+    await loadThenSave(function (data) {
+      if (data.participants && data.participants[id]) {
+        data.participants[id].skipped = !data.participants[id].skipped;
+        // Unskip also un-dones
+        if (!data.participants[id].skipped) {
+          data.participants[id].done = false;
+        }
+      }
+      return data;
+    });
+  }
+
+  async function shuffle() {
+    await loadThenSave(function (data) {
+      var ids = Object.keys(data.participants || {}).filter(function (id) {
+        return !data.participants[id].skipped;
+      });
+      // Fisher-Yates shuffle
+      for (var i = ids.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = ids[i];
+        ids[i] = ids[j];
+        ids[j] = tmp;
+      }
+      data.shuffledOrder = ids;
       return data;
     });
   }
@@ -286,9 +368,11 @@
       if (data.participants) {
         Object.keys(data.participants).forEach(function (id) {
           data.participants[id].done = false;
+          data.participants[id].skipped = false;
         });
       }
       data.startedAt = null;
+      data.shuffledOrder = null;
       return data;
     });
   }
@@ -361,7 +445,9 @@
   // ---- Public API ----
   window.StandupApp = {
     toggleDone: toggleDone,
+    toggleSkip: toggleSkip,
     remove: removeParticipant,
+    shuffle: shuffle,
     start: start,
     reset: reset,
   };
