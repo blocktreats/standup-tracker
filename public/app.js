@@ -440,8 +440,23 @@
     return avatarColors[Math.abs(hash) % avatarColors.length];
   }
 
+  function getContrastTextColor(hex) {
+    // Parse hex to RGB
+    var r = parseInt(hex.slice(1, 3), 16) / 255;
+    var g = parseInt(hex.slice(3, 5), 16) / 255;
+    var b = parseInt(hex.slice(5, 7), 16) / 255;
+    // sRGB to linear
+    r = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
+    g = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
+    b = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
+    var luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return luminance > 0.35 ? '#1b1b1b' : '#ffffff';
+  }
+
   function avatarHtml(name) {
-    return '<div class="avatar" style="background:' + getAvatarColor(name) + '">' + esc(getInitials(name)) + '</div>';
+    var bg = getAvatarColor(name);
+    var fg = getContrastTextColor(bg);
+    return '<div class="avatar" style="background:' + bg + ';color:' + fg + '">' + esc(getInitials(name)) + '</div>';
   }
 
   // ---- Public API ----
