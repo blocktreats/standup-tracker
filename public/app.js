@@ -255,12 +255,12 @@
         + '<button class="btn btn-primary btn-glow" onclick="StandupApp.reset()">New Standup</button>';
     } else if (hasStarted) {
       actions.innerHTML = '<div class="action-buttons">'
-        + '<button class="btn btn-secondary" onclick="StandupApp.shuffle()" title="Shuffle order">' + shuffleSvg() + ' Shuffle</button>'
+        + '<button class="btn btn-secondary" onclick="StandupApp.shuffle()" title="Shuffle order">' + shuffleSvg() + 'Shuffle</button>'
         + '<button class="btn btn-secondary" onclick="StandupApp.reset()">Reset</button>'
         + '</div>';
     } else {
       actions.innerHTML = '<div class="action-buttons">'
-        + '<button class="btn btn-secondary" onclick="StandupApp.shuffle()" title="Shuffle order"' + (total === 0 ? ' disabled' : '') + '>' + shuffleSvg() + ' Shuffle</button>'
+        + '<button class="btn btn-secondary" onclick="StandupApp.shuffle()" title="Shuffle order"' + (total === 0 ? ' disabled' : '') + '>' + shuffleSvg() + 'Shuffle</button>'
         + '<button class="btn btn-primary" onclick="StandupApp.start()"' + (total === 0 ? ' disabled' : '') + '>Start Standup</button>'
         + '</div>';
     }
