@@ -246,12 +246,14 @@
         + '<img src="capy-su.png" alt="" width="24" height="24" class="complete-icon">'
         + ' All done in ' + formatTime(elapsed) + '!'
         + '</div>'
+        + '<div class="complete-message">Standup is over for today, please stay alive.</div>'
         + '<button class="btn btn-primary btn-glow" onclick="StandupApp.reset()">New Standup</button>';
     } else if (allDone) {
       actions.innerHTML = '<div class="complete-banner">'
         + '<img src="capy-su.png" alt="" width="24" height="24" class="complete-icon">'
         + ' All done!'
         + '</div>'
+        + '<div class="complete-message">Standup is over for today, please stay alive.</div>'
         + '<button class="btn btn-primary btn-glow" onclick="StandupApp.reset()">New Standup</button>';
     } else if (hasStarted) {
       actions.innerHTML = '<div class="action-buttons">'

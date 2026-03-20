@@ -908,6 +908,14 @@ footer {
   object-fit: contain;
 }
 
+.complete-message {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-style: italic;
+  margin-bottom: 10px;
+}
+
 /* ---------- Scrollbar ---------- */
 
 main::-webkit-scrollbar {
